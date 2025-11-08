@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Upload MP3 or MP4 – AI Video Summary</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #fff;
+      margin: 0;
+      padding: 0;
+    }
+    .widget-card {
+      max-width: 500px;
+      margin: auto;
+      background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 25%, #90caf9 50%, #bbdefb 75%, #e3f2fd 100%);
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    }
+    h2 {
+      font-size: 1.3rem;
+      text-align: center;
+      margin-bottom: 16px;
+    }
+    .upload-area {
+      border: 2px dashed #ccc;
+      padding: 40px 20px;
+      text-align: center;
+      border-radius: 8px;
+      cursor: pointer;
+      margin-bottom: 10px;
+      background: #fff9f9;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .upload-area:hover {
+      border-color: #ff5f6d;
+    }
+    input[type="file"] {
+      display: none;
+    }
+    select, button {
+      width: 100%;
+      padding: 10px;
+      border-radius: 8px;
+      font-size: 1rem;
+      margin-top: 10px;
+    }
+    button {
+      background: linear-gradient(90deg, #ff5f6d, #ffc371);
+      color: #fff;
+      border: none;
+      cursor: pointer;
+      font-weight: bold;
+    }
+    .result-box {
+      background: #f1f1f1;
+      padding: 10px;
+      margin-top: 15px;
+      border-radius: 8px;
+      font-family: monospace;
+      font-size: 0.9rem;
+      white-space: pre-wrap;
+    }
+    .cta-btn {
+      display: block;
+      text-align: center;
+      margin-top: 15px;
+      background: #0077cc;
+      color: white;
+      padding: 10px;
+      text-decoration: none;
+      border-radius: 8px;
+      font-weight: bold;
+    }
+    footer {
+      text-align: center;
+      font-size: 0.8rem;
+      margin-top: 15px;
+    }
+    footer a {
+      color: #0077cc;
+      text-decoration: none;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <div class="widget-card">
+    <h2>Upload MP3 or MP4 <br><span style="color:red;">Get Subtitles or Transcript</span></h2>
+
+    <label class="upload-area" id="uploadLabel">
+      <span id="uploadText" style="text-align: center; width: 100%;">Click to upload (MP4, MP3, WAV, M4A)</span>
+      <input type="file" id="fileInput" accept=".mp4,.mp3,.wav,.m4a,.mov" />
+    </label>
+
+    <select id="modeSelect">
+      <option value="subtitles">Generate Subtitles</option>
+      <option value="transcription">Get Transcription</option>
+    </select>
+
+    <button id="generateBtn">Get Free Review</button>
+    <div id="result" class="result-box" style="display:none" role="status" aria-live="polite"></div>
+
+    <footer>
+      <a href="https://aivideosummary.com/?utm_source=embed&utm_medium=widget&utm_campaign=upload_widget" target="_blank" rel="noopener">
+        Click to Process Full Files
+      </a>
+    </footer>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', async () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const widgetKey = urlParams.get("key") || "";
+
+      try {
+        const r = await fetch("/api/widgets/validate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ key: widgetKey, referrer: document.referrer }),
+          credentials: "omit"
+        });
+        const j = await r.json();
+
+        if (!r.ok || !j.ok) {
+          document.body.innerHTML =
+            '<div style="max-width:520px;margin:24px auto;padding:14px;background:#fff3cd;border:1px solid #ffeeba;border-radius:8px;font-family:Arial,sans-serif;">This widget is not authorized for <b>this site</b>.</div>';
+          return;
+        }
+      } catch {
+        document.body.innerHTML =
+          '<div style="max-width:520px;margin:24px auto;padding:14px;background:#fff3cd;border:1px solid #ffeeba;border-radius:8px;font-family:Arial,sans-serif;">Authorization check failed.</div>';
+        return;
+      }
+
+      const fileInput = document.getElementById("fileInput");
+      const uploadLabel = document.getElementById("uploadLabel");
+      const uploadText = document.getElementById("uploadText");
+      const resultBox = document.getElementById("result");
+      const modeSelect = document.getElementById("modeSelect");
+      const generateBtn = document.getElementById("generateBtn");
+      const API_BASE = "https://aivideosummary.com";
+
+      fileInput.addEventListener("change", () => {
+        if (fileInput.files.length > 0) {
+          uploadText.textContent = fileInput.files[0].name;
+        }
+      });
+
+      generateBtn.addEventListener("click", () => {
+        const file = fileInput.files[0];
+        const mode = modeSelect.value;
+        if (!file) return alert("Please select a file.");
+
+        const isAudio = file.type.startsWith("audio");
+        const isVideo = file.type.startsWith("video");
+        if (!isAudio && !isVideo) return alert("Invalid file type.");
+
+        if (isVideo && file.size > 20 * 1024 * 1024) {
+          alert("Video file size exceeds the 20 MB limit.");
+          return;
+        }
+
+        if (isAudio && file.size > 10 * 1024 * 1024) {
+          alert("Audio file size exceeds the 10 MB limit.");
+          return;
+        }
+
+        generateBtn.disabled = true;
+        generateBtn.textContent = "Processing, please wait…";
+        resultBox.style.display = "none";
+
+        const endpoint =
+          mode === "subtitles"
+            ? `${API_BASE}/get_subtitle`
+            : `${API_BASE}/get_transcription`;
+
+        const formData = new FormData();
+        formData.append("file", file);
+
+        fetch(endpoint, { method: "POST", body: formData })
+          .then((res) => res.json())
+          .then((res) => {
+            if (!res.task_id) throw new Error("Upload failed");
+            const poll = setInterval(() => {
+              fetch(`${API_BASE}/task_status/${res.task_id}`)
+                .then((r) => r.json())
+                .then((data) => {
+                  if (data.status === "completed") {
+                    clearInterval(poll);
+                    generateBtn.disabled = false;
+                    generateBtn.textContent = "Generate Preview";
+
+                    console.log("poll data →", data);
+
+                    if (mode === "summary" && !data.transcript) {
+                      resultBox.innerText = "(no transcript returned — cannot create summary)";
+                      resultBox.style.display = "block";
+                      generateBtn.disabled = false;
+                      generateBtn.textContent = "Generate Preview";
+                      return;
+                    }
+
+                    if (mode === "summary") {
+                      fetch(`${API_BASE}/get_summary`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ text: data.transcript || "" })
+                      })
+                        .then((r) => r.json())
+                        .then((s) => {
+                          if (!s.task_id) {
+                            resultBox.innerText = "(summary queue failed)";
+                            resultBox.style.display = "block";
+                            return;
+                          }
+                          const spoll = setInterval(() => {
+                            fetch(`${API_BASE}/task_status/${s.task_id}`)
+                              .then(async (rr) => {
+                                const ct = rr.headers.get("content-type") || "";
+                                if (ct.includes("application/json")) return rr.json();
+                                const txt = await rr.text();
+                                throw new Error(`HTTP ${rr.status}: ${txt.slice(0, 200)}`);
+                              })
+                              .then((ss) => {
+                                if (ss.status === "completed") {
+                                  clearInterval(spoll);
+                                  generateBtn.disabled = false;
+                                  generateBtn.textContent = "Generate Preview";
+                                  resultBox.innerText = ss.summary || "(no summary)";
+                                  resultBox.style.display = "block";
+                                } else if (ss.status === "failed") {
+                                  clearInterval(spoll);
+                                  generateBtn.disabled = false;
+                                  generateBtn.textContent = "Generate Preview";
+                                  resultBox.innerText = ss.error || "(summary failed)";
+                                  resultBox.style.display = "block";
+                                }
+                              })
+                              .catch((e) => {
+                                clearInterval(spoll);
+                                generateBtn.disabled = false;
+                                generateBtn.textContent = "Generate Preview";
+                                resultBox.innerText = "Summary polling error: " + e.message;
+                                resultBox.style.display = "block";
+                              });
+                          }, 1500);
+                        })
+                        .catch((err) => {
+                          generateBtn.disabled = false;
+                          generateBtn.textContent = "Generate Preview";
+                          resultBox.innerText = "Summary request error: " + err.message;
+                          resultBox.style.display = "block";
+                        });
+                    } else if (mode === "transcription") {
+                      resultBox.innerText = data.transcript || "(no transcript)";
+                      resultBox.style.display = "block";
+                    } else {
+                      const lines = (data.subtitles || []).map(
+                        (s) => `[${s.start} → ${s.end}] ${s.text}`
+                      );
+                      resultBox.innerText = lines.join("\n") || "(no subtitles)";
+                      resultBox.style.display = "block";
+                    }
+                  }
+                });
+            }, 1500);
+          })
+          .catch((err) => {
+            alert("Error: " + err.message);
+            generateBtn.disabled = false;
+            generateBtn.textContent = "Generate Preview";
+          });
+      });
+    });
+  </script>
+</body>
+</html>
